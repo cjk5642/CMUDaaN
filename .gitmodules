@@ -1,0 +1,6 @@
+[submodule "cmudict.dict"]
+	path = cmudict.dict
+	url = https://github.com/cmusphinx/cmudict
+[submodule "cmudict"]
+	path = cmudict
+	url = https://github.com/cmusphinx/cmudict
