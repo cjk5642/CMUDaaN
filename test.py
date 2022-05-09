@@ -1,4 +1,3 @@
-from wordframe import WordFrame
+from utils import Network
 
-wf = WordFrame()
-print(wf.word_frame)
+net = Network()
