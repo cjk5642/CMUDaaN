@@ -1,7 +1,9 @@
+import itertools
 import os
 import json
 from nltk.metrics.distance import jaro_similarity
-from itertools import combinations
+from nltk.corpus import wordnet as wn
+from itertools import combinations, chain
 from tqdm import tqdm
 import random
 import networkx as nx
@@ -69,7 +71,15 @@ class WordDict:
         return self.word_dict
 
 class Network(WordDict):
-    def __init__(self, n: str or int = None, seq: str = None, startswith: bool = True, **kwargs):
+    def __init__(self, 
+                word: str = None, 
+                wordlist: list = None, 
+                communities: bool = None,
+                n: int = 10, 
+                seq: str = None, 
+                startswith: bool = True,
+                n_synonyms: int = None, 
+                **kwargs):
         """Establish base network class and designations based on user.
 
         Args:
@@ -78,9 +88,13 @@ class Network(WordDict):
             startswith (bool, optional): let class know to search using startswith or endswith. Defaults to True.
         """
         super().__init__()
+        self.word = word
+        self.wordlist = wordlist
+        self.communities = communities
         self.n = int(n)
         self.seq = seq
         self.startswith = startswith
+        self.n_synonyms = n_synonyms
 
     def _find_similarity(self, syls1: list[str], syls2: list[str]) -> float:
         """Find similarity using Jaro Similarity
@@ -116,6 +130,30 @@ class Network(WordDict):
         """
         return set(filter(lambda x: x.endswith(self.seq), keys))
 
+    def _find_combinations_driver(self, stream_keys: list):
+        # if n and seq are None
+        if not self.n and not self.seq:
+            final_keys = stream_keys
+        # if n is not None and seq is None
+        elif self.n and not self.seq:
+            final_keys = random.sample(stream_keys, self.n)
+        # if n is None and seq is not None
+        elif not self.n and self.seq:
+            if self.startswith:
+                final_keys = self._find_startswith(stream_keys)
+            else:
+                final_keys = self._find_endswith(stream_keys)
+        # if n and seq are not None
+        else:
+            if self.startswith:
+                final_keys = random.sample(self._find_startswith(stream_keys), self.n)
+            else:
+                final_keys = random.sample(self._find_endswith(stream_keys), self.n)
+        return final_keys
+
+    def _ensure_word_in_sample(self, word: str, stream_keys: list) -> list:
+        return combinations([word] + random.sample(stream_keys, self.n), 2)
+
     @property
     def _find_combinations(self) -> Iterable[tuple[str, str]]:
         """Find combinations based on class criteria
@@ -124,35 +162,37 @@ class Network(WordDict):
             Iterable[tuple[str, str]]: generated combinations of words
         """
         stream_keys = list(self.stream.keys())
-        if not self.n and not self.seq:
-            final_keys = stream_keys
-        elif self.n and not self.seq:
-            final_keys = random.sample(stream_keys, self.n)
-        elif not self.n and self.seq:
-            if self.startswith:
-                final_keys = self._find_startswith(stream_keys)
-            else:
-                final_keys = self._find_endswith(stream_keys)
-        else:
-            if self.startswith:
-                final_keys = random.sample(self._find_startswith(stream_keys), self.n)
-            else:
-                final_keys = random.sample(self._find_endswith(stream_keys), self.n)
 
+        # if wordlist is not None and commuinities is None
+        if self.wordlist and not self.communities:
+            return combinations(self.wordlist, 2)
+
+        # if wordlist and communities is not None
+        elif self.wordlist and self.communities:
+            wordlist_comb = list(combinations(self.wordlist, 2)) # n*(n-1)/2
+            new_comb = list(chain.from_iterable([self._ensure_word_in_sample(w, stream_keys) for w in self.wordlist])) # 
+            return set(wordlist_comb + new_comb)
+
+        final_keys = self._find_combinations_driver(stream_keys)
         return combinations(final_keys, 2)
 
-    def _produce_edgelist(self, n1: str, n2: str, weight: float) -> str:
+    def _produce_edgelist(self, n1: str, n2: str, weight: float, w1_syllables: list, w2_syllables: list) -> str:
         """Produce connection into edgelist format
 
         Args:
             n1 (str): node 1
             n2 (str): node 2
             weight (float): similarity as edge weight
+            w1_syllables (list): list of n1 syllables
+            w2_syllables (list): list of n2 syllables
 
         Returns:
             str: edgelist string format
         """
-        return f"{n1} {n2} " + "{" + f"\'weight\': {weight}" + "}"
+
+        w1_syl_str = ','.join(w1_syllables)
+        w2_syl_str = ','.join(w2_syllables)
+        return f"{n1} {n2} {weight} {w1_syl_str} {w2_syl_str}"
 
     def _calculate_pairwise_sim(self, combos: Iterable[tuple[str, str]]) -> dict:
         """Calculate the similarity between arbitrary words using their syllables
@@ -164,30 +204,18 @@ class Network(WordDict):
             dict: graph dictionary
         """
         graph_dict = {}
-        for combo in tqdm(combos, total=self._length):
+        for combo in tqdm(combos, total = len(combos)):
             w1, w2 = combo
+            w1_syllables, w2_syllables = self.stream[w1], self.stream[w2]
             id = "_".join(list(sorted([w1, w2])))
             if graph_dict.get(id) is not None:
                 continue
             sim = self._find_similarity(w1, w2)
             if sim <= 0:
                 continue
-            graph_dict[id] = self._produce_edgelist(w1, w2, sim)
-        return graph_dict
-
-    @property
-    def _length(self) -> int:
-        """Return the length using combinatorics
-
-        Returns:
-            int: length of iterable
-        """
-        if self.n == 'all':
-            num_keys = len(list(self.stream.keys()))
-        else:
-            num_keys = self.n
-        return int((num_keys * (num_keys - 1)) / 2)
-
+            graph_dict[id] = self._produce_edgelist(w1, w2, sim, w1_syllables, w2_syllables)
+        return graph_dict 
+        
     @property
     def produce(self) -> dict:
         """Produce the dictionary to construct edgelist
@@ -272,7 +300,30 @@ def graph(**kwargs):
     Returns:
         _type_: _description_
     """
-    graph = nx.parse_edgelist(list(_extract(**kwargs).values()))
+    data = (('weight', float,),('n1_syllables', str,), ('n2_syllables', str,))
+    graph = nx.parse_edgelist(list(_extract(**kwargs).values()), nodetype = str, data = data)
     if kwargs.get('show'):
         _show_graph(graph)
     return graph
+
+def graph_wordlist(wordlist: list, communities: bool = None, **kwargs):
+    kwargs['wordlist'] = wordlist
+    kwargs['communities'] = communities
+    return graph(**kwargs)
+
+def graph_synonym(word: str, communities: bool = None, n_synonyms: bool = None, **kwargs):
+    kwargs['word'] = word
+    kwargs['communities'] = communities
+    kwargs['n_synonyms'] = n_synonyms
+    return graph(**kwargs)
+
+def _create_community(word:str, n_synonyms:int = None, n:int = None):
+    # find n synonyms for word
+    # find n words surround word and word synonyms
+    # run jaro similarity on all words
+    syn = wn.synsets(word)
+    if not n_synonyms:
+        if len(syn) < n_synonyms:
+            syn = random.sample(syn, n_synonyms)
+    
+    pass
