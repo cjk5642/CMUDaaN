@@ -1,5 +1,5 @@
 # CMUDaaN
-CMU Dictionary as a Network (CMUDaaN) is a small library that provides the CMU Dictionary as network consisting of weighted edges by proportional matching and words as nodes.
+CMU Dictionary as a Network (CMUDaaN) is a lightweight library that reframes the CMU Dictionary as network consisting of weighted edges by proportional matching and words as nodes.
 
 ## How it works
 Each word given by the CMU Dict is broken down into syllables. In Pythonic terms, for each word, there is a list of syllables that represent that word. Therefore, for ``n`` words, we now have ``(n * n-1) / 2`` combinations without replacement of words to be studied against using similarity metrics. The metric chosen for this was Jaro Similarity since this produced a number between 0 and 1 and made relative sense with respect to this topic.
