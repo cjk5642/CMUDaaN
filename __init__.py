@@ -1,14 +1,11 @@
 import os
 import json
-from turtle import width
 from nltk.metrics.distance import jaro_similarity
 from itertools import combinations
-from numpy import extract
 from tqdm import tqdm
 import random
 import networkx as nx
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 from collections.abc import Iterable
 
 cmudict_path =  os.path.join('cmudict', 'cmudict.dict')
