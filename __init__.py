@@ -6,21 +6,39 @@ from tqdm import tqdm
 import random
 import networkx as nx
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from collections.abc import Iterable
 
+# instantiate cmudict path
+global cmudict_path
 cmudict_path =  os.path.join('cmudict', 'cmudict.dict')
+
+######################################################## UTILITY
 class WordDict:
-    def __init__(self, cmudict_path: str = cmudict_path):
+    def __init__(self):
+        """Initialize class and create data directory
+
+        """
         self.cmudict_path = cmudict_path
         self.data_path = self._make_data_dir()
 
     def _make_data_dir(self) -> str:
+        """Construct the directory to house cached words
+
+        Returns:
+            str: path to the cached directory
+        """
         dir = "./__cache__"
         if not os.path.isdir(dir):
             os.makedirs(dir)
         return dir
 
     def _create(self) -> dict:
+        """Create the words dictionary based on word-syllables key-value pairs
+
+        Returns:
+            dict: dictionary consisting on word-syllables key-value pairs
+        """
         words = {}
         with open(self.cmudict_path, 'r') as cmu:
             for line in cmu.readlines():
@@ -31,6 +49,11 @@ class WordDict:
 
     @property
     def stream(self) -> dict:
+        """Load if created, create if non-existent.
+
+        Returns:
+            dict: dictionary consisting on word-syllables key-value pairs
+        """
         path = os.path.join(self.data_path, 'wordframe.json')
         if os.path.exists(path):
             with open(path, 'r') as fp:
@@ -46,23 +69,60 @@ class WordDict:
         return self.word_dict
 
 class Network(WordDict):
-    def __init__(self, cmudict_path: str = cmudict_path, n: str or int = None, seq: str = None, startswith: bool = True, **kwargs):
-        super().__init__(cmudict_path)
-        self.n = n
+    def __init__(self, n: str or int = None, seq: str = None, startswith: bool = True, **kwargs):
+        """Establish base network class and designations based on user.
+
+        Args:
+            n (str or int, optional): number of words to create permutations of. Defaults to None.
+            seq (str, optional): letter(s) to determine what the filter should look for. Defaults to None.
+            startswith (bool, optional): let class know to search using startswith or endswith. Defaults to True.
+        """
+        super().__init__()
+        self.n = int(n)
         self.seq = seq
         self.startswith = startswith
 
     def _find_similarity(self, syls1: list[str], syls2: list[str]) -> float:
+        """Find similarity using Jaro Similarity
+
+        Args:
+            syls1 (list[str]): list of syllables
+            syls2 (list[str]): list of syllables
+
+        Returns:
+            float: similarity score
+        """
         return jaro_similarity(syls1, syls2)
 
     def _find_startswith(self, keys: list[str]) -> Iterable[str]:
-        return sorted(filter(lambda x: x.startswith(self.seq), keys))
+        """Find all words that start with self.seq
+
+        Args:
+            keys (list[str]): Words to be filtered
+
+        Returns:
+            Iterable[str]: new set of words based on criteria
+        """
+        return set(filter(lambda x: x.startswith(self.seq), keys))
 
     def _find_endswith(self, keys: list[str]) -> Iterable[str]:
-        return sorted(filter(lambda x: x.endswith(self.seq), keys))
+        """Final all words that end with self.seq
+
+        Args:
+            keys (list[str]): Words to be filtered
+
+        Returns:
+            Iterable[str]: new set of wrods based on critera
+        """
+        return set(filter(lambda x: x.endswith(self.seq), keys))
 
     @property
     def _find_combinations(self) -> Iterable[tuple[str, str]]:
+        """Find combinations based on class criteria
+
+        Returns:
+            Iterable[tuple[str, str]]: generated combinations of words
+        """
         stream_keys = list(self.stream.keys())
         if not self.n and not self.seq:
             final_keys = stream_keys
@@ -81,7 +141,28 @@ class Network(WordDict):
 
         return combinations(final_keys, 2)
 
-    def _calculate_pairwise_sim(self, combos) -> dict:
+    def _produce_edgelist(self, n1: str, n2: str, weight: float) -> str:
+        """Produce connection into edgelist format
+
+        Args:
+            n1 (str): node 1
+            n2 (str): node 2
+            weight (float): similarity as edge weight
+
+        Returns:
+            str: edgelist string format
+        """
+        return f"{n1} {n2} " + "{" + f"\'weight\': {weight}" + "}"
+
+    def _calculate_pairwise_sim(self, combos: Iterable[tuple[str, str]]) -> dict:
+        """Calculate the similarity between arbitrary words using their syllables
+
+        Args:
+            combos (Iterable[tuple[str, str]]): Combinations given the class designation
+
+        Returns:
+            dict: graph dictionary
+        """
         graph_dict = {}
         for combo in tqdm(combos, total=self._length):
             w1, w2 = combo
@@ -91,12 +172,16 @@ class Network(WordDict):
             sim = self._find_similarity(w1, w2)
             if sim <= 0:
                 continue
-            connection = {"node1": w1, 'node2': w2, 'weight': sim}
-            graph_dict[id] = connection
+            graph_dict[id] = self._produce_edgelist(w1, w2, sim)
         return graph_dict
 
     @property
     def _length(self) -> int:
+        """Return the length using combinatorics
+
+        Returns:
+            int: length of iterable
+        """
         if self.n == 'all':
             num_keys = len(list(self.stream.keys()))
         else:
@@ -105,32 +190,42 @@ class Network(WordDict):
 
     @property
     def produce(self) -> dict:
+        """Produce the dictionary to construct edgelist
+
+        Returns:
+            dict: dictionary of id "word1_word2" (sorted) and edgelist configuration
+        """
         # create data dict
         graph_dict = self._calculate_pairwise_sim(self._find_combinations) 
         return graph_dict
 
 ################################### POLICY FUNCTIONS ####################################################
-def _extract(**kwargs):
+def _extract(**kwargs) -> dict:
+    """Extract the Network response
+
+    Returns:
+        dict: dictionary of id "word1_word2" (sorted) and edgelist configuration
+    """
     network = Network(**kwargs)
     return network.produce
 
-def _produce_edgelist(collection: dict) -> list[str]:
-    edgelist = []
-    for _, v in collection.items():
-        n1, n2, weight = list(v.values())
-        edgestring = f"{n1} {n2} " + "{" + f"\'weight\': {weight}" + "}"
-        edgelist.append(edgestring)
-    return edgelist
-
 def _show_graph(G: nx.Graph) -> None:
-    # https://networkx.org/documentation/stable/auto_examples/drawing/plot_directed.html?highlight=colorbar
-    pos = nx.spring_layout(G, k = 0.15, iterations = 20)
-    M = G.number_of_edges()
+    """Graph plotting function to output given then constructed graph. Adapted from:
+    https://networkx.org/documentation/stable/auto_examples/drawing/plot_directed.html?highlight=colorbar
+
+    Args:
+        G (nx.Graph): graph constructed from dictionary
+
+    Returns:
+        None
+    """
+    seed = 1885
+    pos = nx.spring_layout(G, k = 0.15, iterations = 20, seed = seed)
     edge_colors = [G[u][v]['weight'] for u, v in G.edges]
     node_labels = [G[u] for u in G.nodes]
     cmap = plt.cm.plasma
 
-    _ = nx.draw_networkx_nodes(G, pos, node_color="pink", label = node_labels)
+    nodes = nx.draw_networkx_nodes(G, pos, node_color="pink")
     edges = nx.draw_networkx_edges(
         G,
         pos,
@@ -151,8 +246,33 @@ def _show_graph(G: nx.Graph) -> None:
     plt.show()
     return None
 
+def find_max_edges(n: int) -> str:
+    """Find max number of edges given n words
+
+    Args:
+        n (int): number of words or sample size
+
+    Returns:
+        str: Maximum number of edges
+    """
+    network = Network(n = n)
+    return f"Maximum number of edges: {network._length}"
+
 def graph(**kwargs):
-    graph = nx.parse_edgelist(_produce_edgelist(_extract(**kwargs)))
+    """Extract the graph given the criteria. It is not recommended to run the graph as is like ``graph()``. This 
+    will construct all combinations of roughly ~160K words which generates around ~9 Billion pairs. If you would
+    like to see how many edges at most will be constructed, use the ``find_max_edges()`` function for guidance.
+
+    Args:
+        n (strorint, optional): number of words to create permutations of. Defaults to None.
+        seq (str, optional): letter(s) to determine what the filter should look for. Defaults to None.
+        startswith (bool, optional): let class know to search using startswith or endswith. Defaults to True.
+        show (bool, optional): let function know to plot the graph.       
+
+    Returns:
+        _type_: _description_
+    """
+    graph = nx.parse_edgelist(list(_extract(**kwargs).values()))
     if kwargs.get('show'):
         _show_graph(graph)
     return graph
