@@ -117,7 +117,6 @@ class Synonym:
     @property
     def _synonyms(self):
         syn = wn.synsets(self.word)
-        print(syn)
         if self.n_synonyms is not None:
             if self.n_synonyms < len(syn):
                 syn = random.sample(syn, self.n_synonyms)
