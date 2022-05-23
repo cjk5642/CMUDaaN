@@ -1,4 +1,4 @@
-# CMUDaaN
+# [CMUDaaN](https://cjk5642.github.io/CMUDaaN/)
 CMU Dictionary as a Network (CMUDaaN) is a lightweight library that reframes the CMU Dictionary as network consisting of weighted edges by proportional matching and words as nodes.
 
 ## How it works
