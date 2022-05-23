@@ -8,7 +8,7 @@ Each word given by the CMU Dict is broken down into syllables. In Pythonic terms
 ### ``graph_random(...)``
 Using the function ``graph(n = 10, show = True)``, you can create a network like the following:
 <p align="center">
-  <img src="images/example.png">
+  <img src="images/examples/example.png">
 </p>
 This selects 10 random words and establishes connections to them through Jaro Similarity. If the similarity is 0, no connection is made.
 
@@ -20,7 +20,7 @@ g = graph_wordlist(wordlist = wordlist, n = 4, communities = True, show = True)
 ```
 you obtain the following graph:
 <p align='center'>
-  <img src='images/example_wordlist.png'>
+  <img src='images/examples/example_wordlist.png'>
 </p>
 
 ### ``graph_synonym(...)``
@@ -31,5 +31,5 @@ g = graph_synonym(word, communities=True, n_synonyms=None, n = 4, show = True)
 ```
 you obtain the following graph:
 <p align='center'>
-  <img src='images/example_synonym.png'>
+  <img src='images/examples/example_synonym.png'>
 </p>
