@@ -1,18 +1,40 @@
-from utils import Graph, show_graph
-from graphs import WordList, Random, Synonym
+import json
+import os
 
-################################### POLICY FUNCTIONS ####################################################
-def graph_random(n:int = 10, seq:str = None, startswith:bool = None, show:bool = False):
-    graph = Graph(cls = Random, n = n, seq = seq, startswith = startswith)
-    if show: show_graph(graph.graph)
-    return graph
+def make_data_dir(cache_dir: str = "./__cache__") -> str:
+    """Construct the directory to house cached words
 
-def graph_wordlist(wordlist: list, communities: bool = None, show:bool = False):
-    graph = Graph(cls = WordList, wordlist = wordlist, communities=communities)
-    if show: show_graph(graph.graph)
-    return graph
+    Returns:
+        str: path to the cached directory
+    """
+    if not os.path.isdir(cache_dir):
+        os.makedirs(cache_dir)
+    return cache_dir
 
-def graph_synonym(word: str, communities: bool = None, n_synonyms: int = None, n:int = 10, show:bool = False):
-    graph = Graph(cls = Synonym, word = word, communities = communities, n_synonyms = n_synonyms, n = n)
-    if show: show_graph(graph.graph)
-    return graph
+def establish_word_dict(cmudict_path:str = os.path.join('cmudict', 'cmudict.dict'), cache_dir: str = "./__cache__"):
+
+    path = os.path.join(cache_dir, 'wordframe.json')
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as fp:
+            data = json.load(fp)
+        return data
+
+    # data doesn't exist, save out to folder
+    print("Saving to cache...")
+    word_dict = {}
+    with open(cmudict_path, 'r', encoding = 'utf-8') as cmu:
+        for line in cmu.readlines():
+            split_line = line.rstrip('\n').split(" ")
+            split_word, syllables = split_line[0], split_line[1:]
+            word_dict[split_word] = syllables
+
+    with open(path, 'w', encoding='utf-8') as fp:
+        json.dump(word_dict, fp)
+    return None
+
+def main():
+    make_data_dir()
+    establish_word_dict()
+
+if __name__ == "__main__":
+    main()
